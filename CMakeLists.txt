@@ -155,3 +155,9 @@ set(CPACK_DEBIAN_PACKAGE_HOMEPAGE
 set(CPACK_PACKAGE_VENDOR "Open-Agriculture")
 set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
 include(CPack)
+# Add your custom OpenStick Authorized Client target right here
+if(BUILD_EXAMPLES)
+    add_executable(OpenStickIsobusClient examples/isobus_client.cpp)
+    target_link_libraries(OpenStickIsobusClient PRIVATE Isobus HardwareIntegration Utility)
+endif()
+
