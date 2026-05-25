@@ -10,6 +10,10 @@
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/socket_can_interface.hpp"
 
+#include "isobus/isobus/can_stack_logger.hpp"
+
+/* #include "isobus/utility/can_stack_logger.hpp" */
+
 int main()
 {
     std::cout << "Initializing OpenStick ISOBUS Telemetry Node...\n";
@@ -17,33 +21,54 @@ int main()
     // 1. Assign a hardware tracking log layer
     isobus::CANStackLogger::set_log_level(isobus::CANStackLogger::LoggingLevel::Info);
 
-    // 2. Map your physical SocketCAN hardware interface link (attached via UGREEN hub)
+    // 2. Map your physical SocketCAN hardware interface link
     std::shared_ptr<isobus::SocketCANInterface> canInterface = std::make_shared<isobus::SocketCANInterface>("can0");
 
     // 3. Define your unique 64-bit ISO 11783 NAME parameter block
-    // This tells the tractor's ECU who your OpenStick gateway is
     isobus::NAME openStickName(0);
-    openStickName.set_arbitrary_address_capable(true); // Must be true for dynamic claiming
-    openStickName.set_industry_group(2);               // Agricultural and Forestry Equipment
-    openStickName.set_device_class(0);                 // Non-specific task controller node
-    openStickName.set_function_code(130);              // Telematics / Gateway node
-    openStickName.set_manufacturer_code(1178);         // Open-source sandbox tracking value
-    openStickName.set_identity_number(12345);          // Unique serial footprint tracking number
+    openStickName.set_arbitrary_address_capable(true); // Dynamic claiming fallback mode
+    openStickName.set_industry_group(2);               // Agricultural Equipment
+    openStickName.set_device_class(0);                 // Telematics Hub
+    openStickName.set_function_code(130);              // Gateway code
+    openStickName.set_manufacturer_code(1178);         // Sandbox identifier
+    openStickName.set_identity_number(12345);          // Node Serial Number
 
-    // 4. Instantiate your Internal Control Function targeting a preferred starting address
-    // 0x80 (128) is the standard industry starting block for external telemetry modules
-    std::shared_ptr<isobus::InternalControlFunction> openStickICF = 
-        isobus::CANNetworkManager::CANNetworkManager::create_internal_control_function(openStickName, 0x80, 0);
+    // 4. Corrected: Instantiate via the Network Manager Instance Singleton
+/*
+        isobus::CANNetworkManager::get_network_manager()->create_internal_control_function(openStickName, 0x80, 0);
+std::shared_ptr<isobus::InternalControlFunction> openStickICF = 
+        isobus::CANNetworkManager::CANNetworkManager::get_network_manager()->create_internal_control_function(openStickName, 0x80, 0);
 
-    // 5. Connect the hardware layer plugin to the protocol stack execution manager
-    if (!isobus::CANHardwareInterface::get_instance().assign_can_channel_frame_handler(0, canInterface))
+std::shared_ptr<isobus::InternalControlFunction> openStickICF =
+    isobus::CANNetworkManager::get_network_manager()->create_internal_control_function(openStickName, 0x80, 0);
+
+
+
+
+std::shared_ptr<isobus::InternalControlFunction> openStickICF =
+    isobus::CANNetworkManager::CANNetwork.create_internal_control_function(openStickName, 0x80, 0);
+
+
+*/
+
+/*
+std::shared_ptr<isobus::InternalControlFunction> openStickICF =
+    isobus::CANNetworkManager::CANNetwork->create_internal_control_function(openStickName, 0x80, 0);
+*/
+
+
+// To this exactly:
+std::shared_ptr<isobus::InternalControlFunction> openStickICF =
+    isobus::CANNetworkManager::CANNetwork.create_internal_control_function(openStickName, 0x80, 0);
+    // 5. Corrected typo: assign handler through hardware singleton execution layer
+    if (!isobus::CANHardwareInterface::assign_can_channel_frame_handler(0, canInterface))
     {
-        std::cerr << "⚠️ Critical: Failed to bind protocol stack to can0 hardware driver interface.\n";
+        std::cerr << "⚠️ Critical: Failed to bind protocol stack to can0 driver interface.\n";
         return -1;
     }
 
-    // Start the underlying hardware threading queues
-    if (!isobus::CANHardwareInterface::get_instance().start())
+    // Corrected typo: Spin up native hardware threads
+    if (!isobus::CANHardwareInterface::start())
     {
         std::cerr << "⚠️ Critical: Failed to spin up internal hardware execution threads.\n";
         return -1;
@@ -54,11 +79,10 @@ int main()
     // 6. Primary operational execution loop
     while (true)
     {
-        // Keep the address validation state machine alive and processing frame responses
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-        // Check if our node has successfully secured an address on the bus topology
-        if (openStickICF->get_is_valid())
+        // Corrected API parameter name based on compiler suggestion
+        if (openStickICF->get_address_valid())
         {
             static bool printedStatus = false;
             if (!printedStatus)
@@ -68,12 +92,11 @@ int main()
                           << std::hex << static_cast<int>(openStickICF->get_address()) << ")\n";
                 printedStatus = true;
             }
-            
-            // Your custom logic to safely request proprietary PGNs or push ISO-XML metrics goes here!
         }
     }
 
-    isobus::CANHardwareInterface::get_instance().stop();
+    // Corrected typo: Tear down interface
+    isobus::CANHardwareInterface::stop();
     return 0;
 }
 
